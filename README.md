@@ -1,6 +1,6 @@
 # Snap Charts
 
-Interactive Snap Store metrics for snaps maintained by **popey**, built with Canonical Vanilla Framework and Chart.js. The dark header follows [Snap Status](https://snaps.popey.com). Intended repository: `popey/snap-charts`; intended domain: `snap-charts.popey.com`.
+Interactive Snap Store metrics for snaps maintained by **popey**, built with Canonical Vanilla Framework and Chart.js. The dark header follows [Snap Status](https://snaps.popey.com). Public dashboard: [snap-charts.popey.com](https://snap-charts.popey.com). Repository: `popey/snap-charts`.
 
 Includes aggregate and per-app views, daily and seven-day Store metrics, architecture/channel/OS/country/version breakdowns, new/continued/lost devices, date ranges, line and stacked-bar charts, hover values, legend toggles, individual series selection, shareable URLs, CSV downloads and an accessible data table. Separate breakdowns cannot be combined as cross-filters because Snapcraft supplies separate series, not a multidimensional dataset.
 
