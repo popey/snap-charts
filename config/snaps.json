@@ -1,0 +1,173 @@
+{
+  "publisher": "popey",
+  "snaps": [
+    {
+      "name": "add-flatpak",
+      "title": "Add Flatpak"
+    },
+    {
+      "name": "azimuth"
+    },
+    {
+      "name": "b2"
+    },
+    {
+      "name": "bandwhich"
+    },
+    {
+      "name": "bombsquad"
+    },
+    {
+      "name": "calibre"
+    },
+    {
+      "name": "classicube"
+    },
+    {
+      "name": "defold"
+    },
+    {
+      "name": "dog"
+    },
+    {
+      "name": "dosbox-staging"
+    },
+    {
+      "name": "dynahack"
+    },
+    {
+      "name": "emoj"
+    },
+    {
+      "name": "emu2"
+    },
+    {
+      "name": "fab-agon-emulator"
+    },
+    {
+      "name": "forgejo"
+    },
+    {
+      "name": "grummage"
+    },
+    {
+      "name": "grype"
+    },
+    {
+      "name": "halloy"
+    },
+    {
+      "name": "iamb"
+    },
+    {
+      "name": "ladder"
+    },
+    {
+      "name": "lapin"
+    },
+    {
+      "name": "libation"
+    },
+    {
+      "name": "linuxtycoon"
+    },
+    {
+      "name": "mame"
+    },
+    {
+      "name": "matterbridge"
+    },
+    {
+      "name": "mindustry"
+    },
+    {
+      "name": "monolith"
+    },
+    {
+      "name": "natron"
+    },
+    {
+      "name": "ncspot"
+    },
+    {
+      "name": "notepadnext"
+    },
+    {
+      "name": "null"
+    },
+    {
+      "name": "openboardview"
+    },
+    {
+      "name": "pencil"
+    },
+    {
+      "name": "pioneer"
+    },
+    {
+      "name": "piqueserver"
+    },
+    {
+      "name": "pwbm"
+    },
+    {
+      "name": "rota"
+    },
+    {
+      "name": "rustscan"
+    },
+    {
+      "name": "sbommage"
+    },
+    {
+      "name": "session-desktop"
+    },
+    {
+      "name": "sfxr"
+    },
+    {
+      "name": "shattered-pixel-dungeon"
+    },
+    {
+      "name": "slomore"
+    },
+    {
+      "name": "spectrum-analyser"
+    },
+    {
+      "name": "streamsprouting",
+      "title": "Stream Sprouting"
+    },
+    {
+      "name": "suckit"
+    },
+    {
+      "name": "syft"
+    },
+    {
+      "name": "telegram-asahi"
+    },
+    {
+      "name": "tessl"
+    },
+    {
+      "name": "toot"
+    },
+    {
+      "name": "twinejs"
+    },
+    {
+      "name": "word-salad"
+    },
+    {
+      "name": "x16emu"
+    },
+    {
+      "name": "zx-pokemaster"
+    }
+  ],
+  "historyStart": "2014-01-01",
+  "backfillRequests": 120,
+  "workers": 4,
+  "exclude": []
+}

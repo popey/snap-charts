@@ -1,0 +1,13 @@
+node_modules/
+dist/
+public/data/
+.state/
+.demo/
+.env*
+!.env.example
+*.credentials
+login.txt
+__pycache__/
+.wrangler/
+test-results/
+playwright-report/

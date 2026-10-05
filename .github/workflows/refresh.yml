@@ -1,0 +1,53 @@
+name: Refresh and deploy
+on:
+  schedule:
+    - cron: "37 6 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: snap-charts-production
+  cancel-in-progress: false
+jobs:
+  refresh:
+    if: vars.CLOUDFLARE_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      AWS_ENDPOINT_URL: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: npm ci --ignore-scripts
+      - run: npm run verify
+      - name: Install Snapcraft
+        run: sudo snap install snapcraft --classic --channel=latest/stable
+      - name: Restore durable archive
+        id: restore
+        run: aws s3 sync s3://snap-charts-history/state/ .state/ --exclude '*' --include '*/*.json' --only-show-errors
+      - name: Collect all metrics
+        id: collect
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        run: npm run collect
+      - name: Save checkpoints even if collection failed
+        if: always() && steps.restore.outcome == 'success' && steps.collect.outcome != 'skipped'
+        run: aws s3 sync .state/ s3://snap-charts-history/state/ --exclude '*' --include '*/*.json' --only-show-errors
+      - name: Build and deploy snapshot
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          python3 -c 'import json; assert json.load(open("public/data/manifest.json"))["demo"] is False'
+          npm run deploy

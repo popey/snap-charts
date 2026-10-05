@@ -1,0 +1,33 @@
+{
+  "name": "snap-charts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "test:collector": "python3 -m unittest discover -s tests -p 'test_*.py' -v",
+    "collect": "python3 scripts/collect.py",
+    "demo": "python3 scripts/demo.py",
+    "verify": "npm run check && npm test && npm run test:collector && npm run build",
+    "deploy": "npm run build && wrangler deploy",
+    "test:browser": "playwright test",
+    "format": "prettier --write src tests playwright.config.ts package.json tsconfig.json wrangler.jsonc .github README.md"
+  },
+  "dependencies": {
+    "chart.js": "4.5.1",
+    "vanilla-framework": "4.59.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.0",
+    "@types/node": "^24.0.0",
+    "prettier": "^3.9.9",
+    "sass": "^1.101.0",
+    "typescript": "~5.9.3",
+    "vite": "8.3.1",
+    "wrangler": "4.144.0"
+  }
+}
