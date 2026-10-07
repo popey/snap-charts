@@ -20,6 +20,8 @@ jobs:
       AWS_ENDPOINT_URL: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
       AWS_REQUEST_CHECKSUM_CALCULATION: when_required
       AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+      AWS_RETRY_MODE: standard
+      AWS_MAX_ATTEMPTS: "10"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -33,9 +35,13 @@ jobs:
       - run: npm run verify
       - name: Install Snapcraft
         run: sudo snap install snapcraft --classic --channel=latest/stable
+      - name: Limit R2 transfer concurrency
+        run: |
+          aws configure set default.s3.preferred_transfer_client classic
+          aws configure set default.s3.max_concurrent_requests 2
       - name: Restore durable archive
         id: restore
-        run: aws s3 sync s3://snap-charts-history/state/ .state/ --exclude '*' --include '*/*.json' --only-show-errors
+        run: python3 scripts/sync_archive.py restore
       - name: Collect all metrics
         id: collect
         env:
@@ -43,7 +49,7 @@ jobs:
         run: npm run collect
       - name: Save checkpoints even if collection failed
         if: always() && steps.restore.outcome == 'success' && steps.collect.outcome != 'skipped'
-        run: aws s3 sync .state/ s3://snap-charts-history/state/ --exclude '*' --include '*/*.json' --only-show-errors
+        run: python3 scripts/sync_archive.py save
       - name: Build and deploy snapshot
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
