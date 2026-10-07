@@ -38,6 +38,7 @@ const escape = (s: string) =>
 const number = (n: number | null) =>
   n === null ? "—" : n.toLocaleString("en-GB", { maximumFractionDigits: 1 });
 const dimensions = [
+  ["total", "Total installs per snap"],
   ["architecture", "Architecture"],
   ["channel", "Channel"],
   ["operating_system", "Operating system"],
@@ -102,11 +103,15 @@ $("app").innerHTML = `
 
 $<HTMLSelectElement>("period").value = "30";
 
+function showsAppTotals() {
+  return (
+    view !== "metrics" || $<HTMLSelectElement>("dimension").value === "total"
+  );
+}
 function metricName() {
-  const dim =
-      view === "metrics"
-        ? $<HTMLSelectElement>("dimension").value
-        : "architecture",
+  const dim = !showsAppTotals()
+      ? $<HTMLSelectElement>("dimension").value
+      : "architecture",
     weekly = $<HTMLSelectElement>("window").value === "weekly";
   return dim === "change"
     ? `${weekly ? "weekly" : "daily"}_device_change`
@@ -144,6 +149,7 @@ function populateSnaps() {
 }
 async function loadMetric() {
   if (!manifest) return;
+  updateView();
   const id = ++requestId,
     key = metricName();
   loading = true;
@@ -230,14 +236,13 @@ function draw() {
     for (const id of ["total", "change", "coverage"]) $(id).textContent = "—";
     return;
   }
-  latest =
-    view === "metrics"
-      ? aggregate(chosen, start, end)
-      : devicesByApp(
-          Object.fromEntries(names.map((n) => [n, records[n] ?? {}])),
-          start,
-          end,
-        );
+  latest = !showsAppTotals()
+    ? aggregate(chosen, start, end)
+    : devicesByApp(
+        Object.fromEntries(names.map((n) => [n, records[n] ?? {}])),
+        start,
+        end,
+      );
   const isChange =
     view === "metrics" && $<HTMLSelectElement>("dimension").value === "change";
   $("chart-title").textContent =
@@ -300,8 +305,9 @@ function draw() {
   $("description").textContent = isChange
     ? "New, continued and lost devices. Lost devices are shown as positive counts."
     : "Installed base over time. Values are shown exactly as supplied by the Snap Store.";
-  if (view !== "metrics") {
-    const limit = $<HTMLSelectElement>("rank-limit").value;
+  if (showsAppTotals()) {
+    const limit =
+      view === "metrics" ? "all" : $<HTMLSelectElement>("rank-limit").value;
     const visible = rankApps(
       latest.series,
       limit === "all" ? Infinity : Number(limit),
@@ -311,6 +317,9 @@ function draw() {
       (view === "gallery"
         ? "Each chart uses its own vertical scale."
         : "Hover or tap a line for its device count; use the legend to hide apps.");
+    if (view === "metrics")
+      $("description").textContent =
+        "Total installations per snap across all architectures over the selected period.";
     $("app-count").textContent =
       `Showing ${visible.length} of ${names.length} matching apps`;
     $("total-label").textContent = "Latest installations (all matching apps)";
@@ -320,6 +329,7 @@ function draw() {
       visible,
       view === "gallery",
       new Map(manifest.snaps.map((s) => [s.name, s.title])),
+      view === "metrics" && $<HTMLSelectElement>("chart-type").value === "bar",
     );
     return;
   }
@@ -441,9 +451,9 @@ $("export").addEventListener("click", () => {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
-for (const id of ["dimension", "window"])
+for (const id of ["dimension", "window", "snap"])
   $(id).addEventListener("change", loadMetric);
-for (const id of ["snap", "chart-type", "series", "rank-limit"])
+for (const id of ["chart-type", "series", "rank-limit"])
   $(id).addEventListener("change", draw);
 for (const id of ["start", "end"])
   $(id).addEventListener("change", () => {
@@ -461,12 +471,26 @@ $("search").addEventListener("input", () => {
   }
 });
 function updateView() {
+  const dimension = $<HTMLSelectElement>("dimension");
+  const version = [...dimension.options].find((o) => o.value === "version")!;
+  version.disabled = $<HTMLSelectElement>("snap").value === "all";
+  version.textContent = version.disabled
+    ? "Version (select one app)"
+    : "Version";
+  if (view === "metrics" && version.disabled && dimension.value === "version")
+    dimension.value = "total";
+  const controls = document.querySelector(".controls")!;
+  const panel = document.querySelector(".chart-panel")!;
+  const summary = document.querySelector(".summary")!;
+  if (view === "metrics") controls.before(panel);
+  else summary.after(panel);
+
   for (const id of ["snap", "dimension", "chart-type"])
     $(id).parentElement!.hidden = view !== "metrics";
-  $("series-control").hidden = view !== "metrics";
+  $("series-control").hidden = showsAppTotals();
   $("rank-control").hidden = view === "metrics";
   $("chart").parentElement!.hidden = view === "gallery";
-  $("app-legend").hidden = view !== "compare";
+  $("app-legend").hidden = view === "gallery" || !showsAppTotals();
   $("app-charts").hidden = view !== "gallery";
   document
     .querySelectorAll<HTMLAnchorElement>("[data-view]")

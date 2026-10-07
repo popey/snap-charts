@@ -14,6 +14,7 @@ export function renderAppCharts(
   visible: Plot["series"],
   gallery: boolean,
   titles: Map<string, string>,
+  stackedBars = false,
 ) {
   clearAppCharts();
   const root = document.getElementById("app-charts")!;
@@ -29,7 +30,7 @@ export function renderAppCharts(
     small: boolean,
   ) => {
     const chart = new Chart(canvas, {
-      type: "line",
+      type: stackedBars ? "bar" : "line",
       data: {
         labels: plot.dates,
         datasets: series.map((s, i) => ({
@@ -63,10 +64,12 @@ export function renderAppCharts(
         },
         scales: {
           x: {
+            stacked: stackedBars,
             ticks: { maxTicksLimit: small ? 4 : 9, maxRotation: 0 },
             grid: { display: false },
           },
           y: {
+            stacked: stackedBars,
             beginAtZero: true,
             title: { display: !small, text: "Devices per app" },
           },

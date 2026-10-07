@@ -6,7 +6,7 @@ Includes aggregate and per-app views, daily and seven-day Store metrics, archite
 
 ## Dashboard views
 
-- **Breakdowns** retains the architecture, channel, OS, country, version and device-change views.
+- **Breakdowns** opens with a chart above the filters: one total-installations line per snap, using the seven-day Store window over the last 30 days. Architecture, channel, OS, country and device-change views remain available. Version breakdowns require a single app; returning to all apps switches a version chart back to totals.
 - **Compare apps** puts one device-count line per snap on a shared chart. Show every app or the top 10, 20 or 50. The scrollable legend can toggle individual apps.
 - **All app charts** shows a separate chart per snap in a responsive grid, with search and direct links to each app’s breakdowns. Each chart uses its own vertical scale.
 

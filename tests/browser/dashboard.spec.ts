@@ -75,3 +75,67 @@ test("missing manifest produces a useful setup state", async ({ page }) => {
   );
   await expect(page.locator("#export")).toBeDisabled();
 });
+
+test("Breakdowns opens with all app totals above the filters and supports focused breakdowns", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/");
+  await expect(page.locator("#dimension")).toHaveValue("total");
+  await expect(page.locator("#window")).toHaveValue("weekly");
+  await expect(page.locator("#period")).toHaveValue("30");
+  await expect(page.locator("#app-legend button")).toHaveCount(6);
+  await expect(page.locator("#table tbody tr")).toHaveCount(30);
+  await expect(page.locator("#table thead th")).toHaveCount(8);
+  await expect(page.locator("#series-control")).toBeHidden();
+  await expect(
+    page.locator('#dimension option[value="version"]'),
+  ).toBeDisabled();
+  const panel = (await page.locator(".chart-panel").boundingBox())!;
+  const filters = (await page.locator(".controls").boundingBox())!;
+  expect(panel.y).toBeLessThan(filters.y);
+  expect((await page.locator("#chart").boundingBox())!.y).toBeLessThan(600);
+  await page.screenshot({
+    path: "test-results/front-page-totals.png",
+    fullPage: true,
+  });
+
+  await page.locator("#dimension").selectOption("architecture");
+  await expect(page.locator("#series-control")).toBeVisible();
+  await expect(page.locator("#app-legend")).toBeHidden();
+  await expect(page.locator("#chart-kicker")).toContainText("Architecture");
+  await page.locator("#snap").selectOption("calibre");
+  await expect(
+    page.locator('#dimension option[value="version"]'),
+  ).toBeEnabled();
+  await page.locator("#dimension").selectOption("version");
+  await expect(page.locator("#chart-kicker")).toContainText("Version");
+  await page.reload();
+  await expect(page.locator("#dimension")).toHaveValue("version");
+  await expect(page.locator("#snap")).toHaveValue("calibre");
+  await page.locator("#snap").selectOption("all");
+  await expect(page.locator("#dimension")).toHaveValue("total");
+  await expect(page.locator("#app-legend button")).toHaveCount(6);
+  await page.locator("#snap").selectOption("calibre");
+  await expect(page.locator("#app-legend button")).toHaveCount(1);
+  await page.locator("#chart-type").selectOption("bar");
+  await expect(page.locator("#table thead th")).toHaveCount(3);
+
+  await page.getByRole("link", { name: "Compare apps", exact: true }).click();
+  await expect(page.locator("#app-legend button")).toHaveCount(6);
+  expect((await page.locator(".controls").boundingBox())!.y).toBeLessThan(
+    (await page.locator(".chart-panel").boundingBox())!.y,
+  );
+  await page.getByRole("link", { name: "Breakdowns", exact: true }).click();
+  await expect(page.locator("#app-legend button")).toHaveCount(1);
+  expect(errors).toEqual([]);
+});
+
+test("an all-app version bookmark falls back to meaningful totals", async ({
+  page,
+}) => {
+  await page.goto("/?dimension=version&snap=all");
+  await expect(page.locator("#dimension")).toHaveValue("total");
+  await expect(page.locator("#app-legend button")).toHaveCount(6);
+});
