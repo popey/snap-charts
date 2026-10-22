@@ -77,6 +77,10 @@ test("gallery shows a chart for every app, supports search and links to breakdow
   await page.locator("#search").fill("calibre");
   await expect(page.locator(".app-chart-card")).toHaveCount(1);
   await expect(page.locator(".app-chart-card canvas")).toBeVisible();
+  await page.locator("#search").fill("*-*");
+  await expect(page.locator(".app-chart-card")).toHaveCount(2);
+  await page.locator("#search").fill("m?me");
+  await expect(page.locator(".app-chart-card")).toHaveCount(1);
   await page.locator("#search").fill("no-such-app");
   await expect(page.locator("#app-charts")).toContainText("No apps match");
   await page.locator("#search").fill("");

@@ -5,6 +5,7 @@ import {
   combineMetrics,
   csv,
   devicesByApp,
+  matchesSearch,
   rankApps,
 } from "../src/data.ts";
 test("app totals sum architectures once and retain missing dates and zeros", () => {
@@ -112,4 +113,30 @@ test("CSV preserves missing data and escapes formula-like series names", () => {
   });
   assert.ok(result.includes('"\'=bad,"""'));
   assert.ok(result.endsWith("2026-01-01,0,"));
+});
+
+test("search matches substrings, or whole names and titles with wildcards", () => {
+  const snap = { name: "photocraft", title: "PhotoCraft" };
+  assert.equal(matchesSearch(snap, "oto"), true);
+  assert.equal(matchesSearch(snap, ""), true);
+  assert.equal(matchesSearch(snap, "*craft"), true);
+  assert.equal(matchesSearch(snap, "*CRAFT"), true);
+  assert.equal(matchesSearch(snap, "photo*"), true);
+  assert.equal(matchesSearch(snap, "photocraf?"), true);
+  assert.equal(matchesSearch(snap, "*craf"), false);
+  assert.equal(
+    matchesSearch({ name: "craft-tools", title: "craft-tools" }, "*craft"),
+    false,
+  );
+  assert.equal(matchesSearch({ name: "a.b", title: "a.b" }, "a.*"), true);
+  assert.equal(matchesSearch({ name: "axb", title: "axb" }, "a.?"), false);
+  const slow = {
+    name: "shattered-pixel-dungeon",
+    title: "Shattered Pixel Dungeon",
+  };
+  const start = Date.now();
+  assert.equal(matchesSearch(slow, "********************x"), false);
+  assert.equal(matchesSearch(slow, "*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*x"), false);
+  assert.equal(matchesSearch(slow, "*s*p*d*"), true);
+  assert.ok(Date.now() - start < 500);
 });

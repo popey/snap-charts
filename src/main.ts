@@ -4,6 +4,7 @@ import {
   aggregate,
   devicesByApp,
   rankApps,
+  matchesSearch,
   combineMetrics,
   csv,
   type Metric,
@@ -68,7 +69,7 @@ $("app").innerHTML = `
   <h1 class="u-off-screen">Snap Metrics</h1>
   <p id="notice" role="status"></p>
   <section class="controls" aria-label="Chart filters">
-    <div><label for="search">Find an app</label><input id="search" type="search" placeholder="Filter snap names…"></div>
+    <div><label for="search">Find an app</label><input id="search" type="search" placeholder="Filter snap names, e.g. *craft"></div>
     <div><label for="snap">Application</label><select id="snap"><option value="all">All maintained snaps</option></select></div>
     <div><label for="dimension">Breakdown</label><select id="dimension">${options(dimensions)}</select></div>
     <div><label for="window">Store metric</label><select id="window">${options([
@@ -131,15 +132,11 @@ function setDates() {
 function populateSnaps() {
   const select = $<HTMLSelectElement>("snap"),
     chosen = select.value,
-    query = $<HTMLInputElement>("search").value.toLowerCase();
+    query = $<HTMLInputElement>("search").value;
   select.innerHTML =
     '<option value="all">All maintained snaps</option>' +
     manifest.snaps
-      .filter(
-        (s) =>
-          `${s.name} ${s.title}`.toLowerCase().includes(query) ||
-          s.name === chosen,
-      )
+      .filter((s) => matchesSearch(s, query) || s.name === chosen)
       .map(
         (s) =>
           `<option value="${escape(s.name)}">${escape(s.title)} (${escape(s.name)})</option>`,
@@ -211,15 +208,11 @@ function draw() {
   if (!manifest || loading) return;
   const selected =
     view === "metrics" ? $<HTMLSelectElement>("snap").value : "all";
-  const query = $<HTMLInputElement>("search").value.toLowerCase();
+  const query = $<HTMLInputElement>("search").value;
   const names =
     selected === "all"
       ? manifest.snaps
-          .filter(
-            (s) =>
-              view === "metrics" ||
-              `${s.name} ${s.title}`.toLowerCase().includes(query),
-          )
+          .filter((s) => !showsAppTotals() || matchesSearch(s, query))
           .map((s) => s.name)
       : [selected];
   const chosen = names.map((n) => records[n] ?? {});
@@ -432,7 +425,7 @@ function finishDraw(
   const params = new URLSearchParams({
     view,
     top: $<HTMLSelectElement>("rank-limit").value,
-    search: view === "metrics" ? "" : $<HTMLInputElement>("search").value,
+    search: showsAppTotals() ? $<HTMLInputElement>("search").value : "",
     snap: selected,
     dimension: $<HTMLSelectElement>("dimension").value,
     window: $<HTMLSelectElement>("window").value,
@@ -467,7 +460,7 @@ $("period").addEventListener("change", () => {
 $("search").addEventListener("input", () => {
   if (manifest) {
     populateSnaps();
-    if (view !== "metrics") draw();
+    if (showsAppTotals()) draw();
   }
 });
 function updateView() {

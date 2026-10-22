@@ -43,6 +43,45 @@ export function devicesByApp(
   };
 }
 
+// Plain text matches anywhere; `*` and `?` wildcards match the whole name or title.
+export function matchesSearch(
+  snap: { name: string; title: string },
+  query: string,
+): boolean {
+  const q = query.trim().toLowerCase();
+  if (!/[*?]/.test(q))
+    return `${snap.name} ${snap.title}`.toLowerCase().includes(q);
+  return [snap.name, snap.title].some((s) => globMatch(q, s.toLowerCase()));
+}
+
+// Iterative matcher that backtracks only to the latest `*`, so runtime is
+// O(pattern * text) however many wildcards the pattern has.
+function globMatch(pattern: string, text: string): boolean {
+  let p = 0;
+  let t = 0;
+  let star = -1;
+  let mark = 0;
+  while (t < text.length) {
+    if (p < pattern.length && pattern[p] === "*") {
+      star = p++;
+      mark = t;
+    } else if (
+      p < pattern.length &&
+      (pattern[p] === "?" || pattern[p] === text[t])
+    ) {
+      p++;
+      t++;
+    } else if (star >= 0) {
+      p = star + 1;
+      t = ++mark;
+    } else {
+      return false;
+    }
+  }
+  while (pattern[p] === "*") p++;
+  return p === pattern.length;
+}
+
 export function rankApps(
   series: Plot["series"],
   limit: number,
