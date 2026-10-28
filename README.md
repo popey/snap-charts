@@ -10,6 +10,8 @@ Includes aggregate and per-app views, daily and seven-day Store metrics, archite
 - **Compare apps** puts one device-count line per snap on a shared chart. Show every app or the top 10, 20 or 50. The scrollable legend can toggle individual apps.
 - **All app charts** shows a separate chart per snap in a responsive grid, with search and direct links to each app’s breakdowns. Each chart uses its own vertical scale.
 
+**Choose apps:** Paste `calibre,add-flatpak,notepadnext` into **Find an app** to select those exact snap names, or open **Applications** and tick the apps you want. Both controls stay in sync across all views, breakdowns, totals and CSV exports. Comma-separated names ignore case, surrounding spaces, duplicates and empty entries; unknown names do not match. A single complete snap name selects that app; other single terms search names and titles by substring, with `*` and `?` available for whole-name/title wildcard matching. Editing a checkbox turns the current matches into an explicit name list. Clear the field, untick the last app or choose **All apps** to reset. Shared URLs retain the selection, and existing single-app links still work. Version breakdowns require exactly one matching app.
+
 The app views sum architecture counts once per app; they never add together different breakdown metrics. Ranking uses each app’s latest non-missing observation within the selected period, so the Store’s occasionally incomplete latest day does not demote apps that have not reported yet. Missing values remain gaps. Date range and daily/seven-day controls apply to all charts, and URLs retain the chosen view, search and top-app limit. CSV includes all matching apps, even when the chart is limited to the top 10/20/50.
 
 ## Local preview

@@ -16,7 +16,7 @@ test("filters, chart types, data table, CSV and shareable state", async ({
   expect((await page.locator("#chart").boundingBox())!.height).toBe(860);
   await page.locator("#period").selectOption("7");
   await expect(page.locator("#table tbody tr")).toHaveCount(7);
-  await page.locator("#snap").selectOption("calibre");
+  await page.locator("#search").fill("calibre");
   await expect(page.locator("#coverage")).toHaveText("1 / 1");
   await page.locator("#dimension").selectOption("operating_system");
   await expect(page.locator("#chart-kicker")).toContainText("Operating system");
@@ -24,7 +24,10 @@ test("filters, chart types, data table, CSV and shareable state", async ({
   await expect(page.locator("#chart-kicker")).toContainText("Daily");
   await page.locator("#chart-type").selectOption("bar");
   await page.locator("#period").selectOption("90");
-  await page.locator("summary").click();
+  await page
+    .locator("summary")
+    .filter({ hasText: "Explore the numbers" })
+    .click();
   await expect(page.locator("#table tbody tr")).toHaveCount(90);
   await page.locator("#series").selectOption("Ubuntu/24.04");
   await expect(page.locator("#table thead th")).toHaveCount(3);
@@ -34,7 +37,7 @@ test("filters, chart types, data table, CSV and shareable state", async ({
     "calibre-installed_base_by_operating_system",
   );
   await page.reload();
-  await expect(page.locator("#snap")).toHaveValue("calibre");
+  await expect(page.locator("#search")).toHaveValue("calibre");
   await expect(page.locator("#table tbody tr")).toHaveCount(90);
   await page.screenshot({
     path: "test-results/dashboard-desktop.png",
@@ -105,7 +108,7 @@ test("Breakdowns opens with all app totals above the filters and supports focuse
   await expect(page.locator("#series-control")).toBeVisible();
   await expect(page.locator("#app-legend")).toBeHidden();
   await expect(page.locator("#chart-kicker")).toContainText("Architecture");
-  await page.locator("#snap").selectOption("calibre");
+  await page.locator("#search").fill("calibre");
   await expect(
     page.locator('#dimension option[value="version"]'),
   ).toBeEnabled();
@@ -113,17 +116,17 @@ test("Breakdowns opens with all app totals above the filters and supports focuse
   await expect(page.locator("#chart-kicker")).toContainText("Version");
   await page.reload();
   await expect(page.locator("#dimension")).toHaveValue("version");
-  await expect(page.locator("#snap")).toHaveValue("calibre");
-  await page.locator("#snap").selectOption("all");
+  await expect(page.locator("#search")).toHaveValue("calibre");
+  await page.locator("#search").fill("");
   await expect(page.locator("#dimension")).toHaveValue("total");
   await expect(page.locator("#app-legend button")).toHaveCount(6);
-  await page.locator("#snap").selectOption("calibre");
+  await page.locator("#search").fill("calibre");
   await expect(page.locator("#app-legend button")).toHaveCount(1);
   await page.locator("#chart-type").selectOption("bar");
   await expect(page.locator("#table thead th")).toHaveCount(3);
 
   await page.getByRole("link", { name: "Compare apps", exact: true }).click();
-  await expect(page.locator("#app-legend button")).toHaveCount(6);
+  await expect(page.locator("#app-legend button")).toHaveCount(1);
   expect((await page.locator(".controls").boundingBox())!.y).toBeLessThan(
     (await page.locator(".chart-panel").boundingBox())!.y,
   );

@@ -69,8 +69,8 @@ $("app").innerHTML = `
   <h1 class="u-off-screen">Snap Metrics</h1>
   <p id="notice" role="status"></p>
   <section class="controls" aria-label="Chart filters">
-    <div><label for="search">Find an app</label><input id="search" type="search" placeholder="Filter snap names, e.g. *craft"></div>
-    <div><label for="snap">Application</label><select id="snap"><option value="all">All maintained snaps</option></select></div>
+    <div><label for="search">Find an app</label><input id="search" type="search" placeholder="calibre,add-flatpak,notepadnext" aria-describedby="search-help"><small id="search-help">Search text or wildcards, or paste exact snap names separated by commas.</small></div>
+    <div class="app-picker"><span id="apps-label">Applications</span><details id="app-picker"><summary id="selection-summary">All apps</summary><button id="clear-apps" type="button">All apps</button><div id="snap" role="group" aria-labelledby="apps-label"></div></details></div>
     <div><label for="dimension">Breakdown</label><select id="dimension">${options(dimensions)}</select></div>
     <div><label for="window">Store metric</label><select id="window">${options([
       ["weekly", "Seven-day window"],
@@ -129,20 +129,39 @@ function setDates() {
           .toISOString()
           .slice(0, 10);
 }
+function selectedNames() {
+  const query = $<HTMLInputElement>("search").value.trim();
+  const exact = manifest.snaps.find((s) => s.name === query.toLowerCase());
+  return exact
+    ? [exact.name]
+    : manifest.snaps.filter((s) => matchesSearch(s, query)).map((s) => s.name);
+}
 function populateSnaps() {
-  const select = $<HTMLSelectElement>("snap"),
-    chosen = select.value,
-    query = $<HTMLInputElement>("search").value;
-  select.innerHTML =
-    '<option value="all">All maintained snaps</option>' +
-    manifest.snaps
-      .filter((s) => matchesSearch(s, query) || s.name === chosen)
-      .map(
-        (s) =>
-          `<option value="${escape(s.name)}">${escape(s.title)} (${escape(s.name)})</option>`,
-      )
-      .join("");
-  select.value = chosen;
+  $("snap").innerHTML = manifest.snaps
+    .map(
+      (s) =>
+        `<label><input type="checkbox" value="${escape(s.name)}"> ${escape(s.title)} (${escape(s.name)})</label>`,
+    )
+    .join("");
+  syncSelection();
+}
+function syncSelection() {
+  const names = new Set(selectedNames());
+  document
+    .querySelectorAll<HTMLInputElement>("#snap input")
+    .forEach((input) => {
+      input.checked =
+        !!$<HTMLInputElement>("search").value.trim() && names.has(input.value);
+    });
+  $("selection-summary").textContent = !$<HTMLInputElement>(
+    "search",
+  ).value.trim()
+    ? "All apps"
+    : `${names.size} ${names.size === 1 ? "app" : "apps"} selected`;
+}
+function changeSelection() {
+  syncSelection();
+  void loadMetric();
 }
 async function loadMetric() {
   if (!manifest) return;
@@ -206,15 +225,8 @@ async function loadMetric() {
 }
 function draw() {
   if (!manifest || loading) return;
-  const selected =
-    view === "metrics" ? $<HTMLSelectElement>("snap").value : "all";
-  const query = $<HTMLInputElement>("search").value;
-  const names =
-    selected === "all"
-      ? manifest.snaps
-          .filter((s) => !showsAppTotals() || matchesSearch(s, query))
-          .map((s) => s.name)
-      : [selected];
+  const names = selectedNames();
+  const selected = names.length === 1 ? names[0] : "all";
   const chosen = names.map((n) => records[n] ?? {});
   const start = $<HTMLInputElement>("start").value,
     end = $<HTMLInputElement>("end").value;
@@ -244,7 +256,9 @@ function draw() {
       : view === "gallery"
         ? "All app charts"
         : selected === "all"
-          ? "All maintained snaps"
+          ? $<HTMLInputElement>("search").value.trim()
+            ? `${names.length} selected apps`
+            : "All maintained snaps"
           : manifest.snaps.find((s) => s.name === selected)!.title;
   $("chart-kicker").textContent =
     `${view === "metrics" ? $<HTMLSelectElement>("dimension").selectedOptions[0].text : "Devices per app"} · ${$<HTMLSelectElement>("window").selectedOptions[0].text}`;
@@ -425,7 +439,7 @@ function finishDraw(
   const params = new URLSearchParams({
     view,
     top: $<HTMLSelectElement>("rank-limit").value,
-    search: showsAppTotals() ? $<HTMLInputElement>("search").value : "",
+    search: $<HTMLInputElement>("search").value,
     snap: selected,
     dimension: $<HTMLSelectElement>("dimension").value,
     window: $<HTMLSelectElement>("window").value,
@@ -440,11 +454,11 @@ $("export").addEventListener("click", () => {
   );
   const a = document.createElement("a");
   a.href = url;
-  a.download = `snap-charts-${view === "metrics" ? $<HTMLSelectElement>("snap").value : "apps"}-${metricName()}.csv`;
+  a.download = `snap-charts-${view === "metrics" ? (selectedNames().length === 1 ? selectedNames()[0] : "selected-apps") : "apps"}-${metricName()}.csv`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
-for (const id of ["dimension", "window", "snap"])
+for (const id of ["dimension", "window"])
   $(id).addEventListener("change", loadMetric);
 for (const id of ["chart-type", "series", "rank-limit"])
   $(id).addEventListener("change", draw);
@@ -458,15 +472,27 @@ $("period").addEventListener("change", () => {
   void loadMetric();
 });
 $("search").addEventListener("input", () => {
-  if (manifest) {
-    populateSnaps();
-    if (showsAppTotals()) draw();
-  }
+  if (manifest) changeSelection();
+});
+$("snap").addEventListener("change", (event) => {
+  const input = event.target as HTMLInputElement;
+  // The first pick from an unfiltered chart starts a new explicit selection.
+  const names = !$<HTMLInputElement>("search").value.trim()
+    ? [input.value]
+    : [
+        ...document.querySelectorAll<HTMLInputElement>("#snap input:checked"),
+      ].map((el) => el.value);
+  $<HTMLInputElement>("search").value = names.join(",");
+  changeSelection();
+});
+$("clear-apps").addEventListener("click", () => {
+  $<HTMLInputElement>("search").value = "";
+  changeSelection();
 });
 function updateView() {
   const dimension = $<HTMLSelectElement>("dimension");
   const version = [...dimension.options].find((o) => o.value === "version")!;
-  version.disabled = $<HTMLSelectElement>("snap").value === "all";
+  version.disabled = selectedNames().length !== 1;
   version.textContent = version.disabled
     ? "Version (select one app)"
     : "Version";
@@ -478,7 +504,7 @@ function updateView() {
   if (view === "metrics") controls.before(panel);
   else summary.after(panel);
 
-  for (const id of ["snap", "dimension", "chart-type"])
+  for (const id of ["dimension", "chart-type"])
     $(id).parentElement!.hidden = view !== "metrics";
   $("series-control").hidden = showsAppTotals();
   $("rank-control").hidden = view === "metrics";
@@ -511,7 +537,6 @@ async function init() {
       "No metrics collected yet. Run the collector, or run npm run demo for a labelled local preview.",
     );
   manifest = await response.json();
-  populateSnaps();
   setDates();
   const params = new URLSearchParams(location.search);
   const requestedView = params.get("view");
@@ -520,9 +545,12 @@ async function init() {
   const top = params.get("top");
   if (top && ["all", "10", "20", "50"].includes(top))
     $<HTMLSelectElement>("rank-limit").value = top;
-  $<HTMLInputElement>("search").value = params.get("search") ?? "";
+  $<HTMLInputElement>("search").value =
+    params.get("search") ||
+    (params.get("snap") !== "all" ? (params.get("snap") ?? "") : "");
+  populateSnaps();
   updateView();
-  for (const id of ["snap", "dimension", "window"]) {
+  for (const id of ["dimension", "window"]) {
     const el = $<HTMLSelectElement>(id),
       value = params.get(id);
     if (value && [...el.options].some((o) => o.value === value))

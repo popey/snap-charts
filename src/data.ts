@@ -49,6 +49,12 @@ export function matchesSearch(
   query: string,
 ): boolean {
   const q = query.trim().toLowerCase();
+  if (q.includes(","))
+    return q
+      .split(",")
+      .map((name) => name.trim())
+      .filter(Boolean)
+      .includes(snap.name.toLowerCase());
   if (!/[*?]/.test(q))
     return `${snap.name} ${snap.title}`.toLowerCase().includes(q);
   return [snap.name, snap.title].some((s) => globMatch(q, s.toLowerCase()));
