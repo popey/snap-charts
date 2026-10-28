@@ -140,3 +140,13 @@ test("search matches substrings, or whole names and titles with wildcards", () =
   assert.equal(matchesSearch(slow, "*s*p*d*"), true);
   assert.ok(Date.now() - start < 500);
 });
+
+test("comma lists match exact snap names, ignoring spaces, case and duplicates", () => {
+  const snap = { name: "calibre", title: "Calibre Reader" };
+  assert.equal(matchesSearch(snap, " CALIBRE, add-flatpak,calibre, "), true);
+  assert.equal(matchesSearch(snap, "cal,notepadnext"), false);
+  assert.equal(matchesSearch(snap, "Calibre Reader,notepadnext"), false);
+  assert.equal(matchesSearch(snap, ", ,"), false);
+  assert.equal(matchesSearch(snap, "cal*,notepadnext"), false);
+  assert.equal(matchesSearch(snap, "calibre,"), true);
+});
