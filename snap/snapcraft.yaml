@@ -1,0 +1,55 @@
+name: snap-charts-server
+title: Snap Charts Server
+base: core26
+version: git
+summary: Self-hosted Snap Store metrics dashboard for a publisher
+description: |
+  Collects Snap Store metrics for every snap of a publisher and serves an
+  interactive dashboard.
+
+  Configure with:
+    sudo snap set snap-charts-server publisher=<store-username>
+    sudo snap set snap-charts-server credentials="$(cat snap-charts.credentials)"
+    sudo snap set snap-charts-server port=8080   # optional
+
+  Once the publisher is set, the list of snaps is discovered automatically and
+  written to snaps.json. Collection runs daily directly from the Store API
+  and needs metrics-only credentials
+  (snapcraft export-login --snaps=... --acls=package_metrics -).
+grade: stable
+confinement: strict
+
+apps:
+  web:
+    command: usr/bin/python3 $SNAP/bin/serve.py
+    daemon: simple
+    restart-condition: always
+    plugs: [network-bind]
+  collector:
+    command: usr/bin/python3 $SNAP/bin/collector.py
+    daemon: simple
+    restart-condition: always
+    plugs: [network]
+
+parts:
+  python-deps:
+    plugin: nil
+    stage-packages: [python3, python3-pymacaroons]
+  dashboard:
+    plugin: nil
+    source: .
+    build-snaps: [node/24/stable]
+    override-build: |
+      npm ci --ignore-scripts
+      npm run build
+      mkdir -p $CRAFT_PART_INSTALL/www $CRAFT_PART_INSTALL/scripts $CRAFT_PART_INSTALL/config
+      cp -r dist/. $CRAFT_PART_INSTALL/www/
+      rm -rf $CRAFT_PART_INSTALL/www/data
+      cp scripts/collect.py scripts/store_api.py $CRAFT_PART_INSTALL/scripts/
+      cp config/snaps.json $CRAFT_PART_INSTALL/config/
+  services:
+    plugin: dump
+    source: snap/local
+    organize:
+      serve.py: bin/serve.py
+      collector.py: bin/collector.py

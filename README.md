@@ -16,7 +16,7 @@ The app views sum architecture counts once per app; they never add together diff
 
 ## Local preview
 
-Requires Node.js 24+, Python 3.12+, and Snapcraft for real collection.
+Requires Node.js 24+ and Python 3.12+. Real collection also needs `pip install -r requirements.txt` and Snapcraft only to create credentials (`snapcraft login`/`export-login`).
 
 ```sh
 npm ci --ignore-scripts
@@ -29,18 +29,19 @@ Demo figures are synthetic and visibly labelled. Generated files are ignored by 
 ## Collect real metrics
 
 ```sh
-snapcraft login
-npm run collect
+python3 -m pip install -r requirements.txt
+snapcraft export-login --acls package_metrics snap-charts.credentials
+npm run collect -- --credentials snap-charts.credentials
 npm run dev
 ```
 
-If you exported a metrics-only credential instead of using the desktop keyring, run `npm run collect -- --credentials snap-charts.credentials`. The file is read directly into the child process environment and never printed.
+Collection requires an exported metrics-only credential, supplied with `--credentials` or the `SNAPCRAFT_STORE_CREDENTIALS` environment variable. The collector does not read Snapcraft's desktop keyring. Credential files are read in memory and never printed.
 
-The installed Snapcraft 9.1 metrics model rejects Store `null` observations. When that exact validation error occurs, the collector retries through `scripts/snapcraft_metrics_compat.py` using the installed snap’s Python and Snapcraft application. This narrowly adds `None` to the in-process series value type; it does not modify the installed snap, alter authentication, or turn gaps into zero. Other CLI failures retain the normal retry/error handling.
+Metrics are fetched directly from the Snap Store dashboard API (`scripts/store_api.py`) using the exported Snapcraft credential, so the Snapcraft CLI is not needed at collection time. Store `null` observations are preserved as gaps, never zero.
 
 The collector discovers current public snaps from the Snap Store publisher API and unions them with `config/snaps.json`, initially seeded from `popey/snap-status`. Add private, collaborator-maintained or unpublished snaps to that file. Add inaccessible/transferred snaps to `exclude`. Public discovery is mandatory and fails closed on errors; it is not an authenticated enumeration of private or collaborator snaps. The tracked set stays independent of future changes to snap-status.
 
-All 12 metrics in the [Snapcraft metrics reference](https://ubuntu.com/docs/snapcraft/latest/reference/metrics/) are collected using [`snapcraft metrics --format=json`](https://ubuntu.com/docs/snapcraft/latest/how-to/publishing/get-snap-metrics.md). Dates are UTC, ending yesterday because Store metrics are daily. The current 31-day interval is refreshed daily to pick up late corrections. Downtime gaps are recovered. Historical data is fetched back to `historyStart` (default January 2014), in requests of at most 365 days to accommodate both older Store and newer CLI limits. Each run performs up to `backfillRequests` additional historical requests (default 120), favouring the least-backfilled metrics. First runs show partial history explicitly; repeated daily runs fill it in. A successful empty historical response advances the cursor without inventing observations.
+All 12 metrics in the [Snapcraft metrics reference](https://ubuntu.com/docs/snapcraft/latest/reference/metrics/) are collected from the same Store endpoint used by [`snapcraft metrics`](https://ubuntu.com/docs/snapcraft/latest/how-to/publishing/get-snap-metrics.md). Dates are UTC, ending yesterday because Store metrics are daily. The current 31-day interval is refreshed daily to pick up late corrections. Downtime gaps are recovered. Historical data is fetched back to `historyStart` (default January 2014), in requests of at most 365 days to accommodate both older Store and newer CLI limits. Each run performs up to `backfillRequests` additional historical requests (default 120), favouring the least-backfilled metrics. First runs show partial history explicitly; repeated daily runs fill it in. A successful empty historical response advances the cursor without inventing observations.
 
 For an unattended full backfill, run:
 
@@ -100,6 +101,7 @@ Cloudflare hosting, R2 and Actions usage are subject to your account limits. The
 ## Verification
 
 ```sh
+python3 -m pip install -r requirements.txt
 npm run verify
 npm run test:browser
 npm audit --audit-level=high
@@ -110,3 +112,15 @@ Browser tests require `npx playwright install chromium` once. They generate synt
 Aggregate counts represent **snap installations**, not unique machines. Seven-day installed-base metrics are Store rolling averages, not weekly sums. Device change categories should be read independently; adding new, continued and lost does not give installed base. The chart defaults to the top 10 series; every other series can be selected individually. The accessible table shows up to 100 dates for the displayed series, while CSV includes every series and date in the selected period. Partial coverage can change totals and apparent growth. Metric timestamps and coverage are exposed so these limits are visible.
 
 MIT licensed. Header structure and initial inventory adapted from popey/snap-status (MIT).
+
+## Snap package (snap-charts-server)
+
+`snap/snapcraft.yaml` builds a strictly confined snap that serves the dashboard and refreshes metrics daily by calling the Store API directly.
+
+```sh
+sudo snap set snap-charts-server publisher=<store-username>
+sudo snap set snap-charts-server credentials="$(cat snap-charts.credentials)"
+sudo snap set snap-charts-server port=8080   # optional, default 8080
+```
+
+Setting options restarts the services. Ports must be integers from 1 to 65535. The collector writes `$SNAP_COMMON/config/snaps.json` for the configured publisher and fills in its snap list from Store discovery on each run (`collect.py --publisher/--sync-config`). Failed or empty discovery preserves the published snapshot; failed collections retry after 30 minutes. Account-accessible snaps are never automatically added as a fallback. Data lives in `$SNAP_COMMON`; follow progress with `snap logs -f snap-charts-server.collector`. Credentials are stored in snapd's configuration, so use a metrics-only export.

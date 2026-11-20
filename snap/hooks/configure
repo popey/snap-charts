@@ -1,0 +1,18 @@
+#!/bin/sh -e
+publisher="$(snapctl get publisher)"
+if [ -n "$publisher" ] && ! printf '%s' "$publisher" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]*$'; then
+    echo "Invalid publisher name: $publisher" >&2
+    exit 1
+fi
+port="$(snapctl get port)"
+if [ -n "$port" ]; then
+    case "$port" in
+        *[!0-9]*|0*) echo "port must be an integer between 1 and 65535" >&2; exit 1 ;;
+    esac
+    if [ "${#port}" -gt 5 ] || [ "$port" -gt 65535 ]; then
+        echo "port must be an integer between 1 and 65535" >&2
+        exit 1
+    fi
+fi
+# The services may not exist yet when the hook runs during installation.
+snapctl restart "$SNAP_INSTANCE_NAME" 2>/dev/null || true

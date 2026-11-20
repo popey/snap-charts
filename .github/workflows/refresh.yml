@@ -32,9 +32,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: npm ci --ignore-scripts
+      - run: python3 -m pip install -r requirements.txt
       - run: npm run verify
-      - name: Install Snapcraft
-        run: sudo snap install snapcraft --classic --channel=latest/stable
       - name: Limit R2 transfer concurrency
         run: |
           aws configure set default.s3.preferred_transfer_client classic
