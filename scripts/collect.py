@@ -1,4 +1,4 @@
-"""Incremental Snapcraft metrics archive. Credentials only enter snapcraft's environment."""
+"""Incremental Snap Store metrics archive using the Store dashboard API."""
 import argparse
 import fcntl
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -7,7 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
-import subprocess
+from threading import Lock
 import time
 from urllib.request import Request, urlopen
 
@@ -15,23 +15,17 @@ DIMENSIONS = ('architecture', 'channel', 'country', 'operating_system', 'version
 METRICS = ['daily_device_change', 'weekly_device_change'] + [
     prefix + 'installed_base_by_' + dimension
     for prefix in ('', 'weekly_') for dimension in DIMENSIONS]
-NULL_COMPAT = False
+_CLIENT = None
+_CLIENT_LOCK = Lock()
 
 
-def run_snapcraft(arguments):
-    global NULL_COMPAT
-    python = Path('/snap/snapcraft/current/bin/python')
-    compat = [str(python), str(Path(__file__).with_name('snapcraft_metrics_compat.py'))]
-    result = subprocess.run((compat if NULL_COMPAT else ['snapcraft']) + arguments,
-                            capture_output=True, text=True, timeout=120, check=False)
-    if (result.returncode and not NULL_COMPAT and python.exists()
-            and 'MetricsResponse' in result.stderr and 'input_value=None' in result.stderr):
-        NULL_COMPAT = True
-        print('Applying Snapcraft null-observation compatibility fix.', flush=True)
-        result = subprocess.run(compat + arguments, capture_output=True, text=True,
-                                timeout=120, check=False)
-    result.check_returncode()
-    return result
+def store_client():
+    global _CLIENT
+    with _CLIENT_LOCK:
+        if _CLIENT is None:
+            from store_api import StoreClient
+            _CLIENT = StoreClient(os.environ.get('SNAPCRAFT_STORE_CREDENTIALS', ''))
+    return _CLIENT
 
 
 def write_json(path, value):
@@ -84,20 +78,15 @@ def merge(old, new):
 def fetch_metric(snap, metric, start, end):
     for attempt in range(3):
         try:
-            result = run_snapcraft([
-                'metrics', snap, '--name', metric, '--format=json',
-                '--start', str(start), '--end', str(end)])
-            # Some versions return no output when no data exists.
-            data = json.loads(result.stdout) if result.stdout.strip() else {
-                'status': 'OK', 'metric_name': metric, 'buckets': [], 'series': []}
+            data = store_client().metrics(snap, metric, start, end)
             validate(data, metric)
             if any(not str(start) <= day <= str(end) for day in data['buckets']):
                 raise ValueError('Returned dates outside requested range')
             return data
-        except (subprocess.SubprocessError, ValueError, KeyError):
+        except (RuntimeError, ValueError, KeyError):
             if attempt == 2:
                 # Do not print CLI output: it could contain credential diagnostics.
-                raise RuntimeError('Snapcraft query failed after three attempts') from None
+                raise RuntimeError('Store metrics query failed after three attempts') from None
             time.sleep(2 ** attempt)
 
 
@@ -105,21 +94,32 @@ def discover(config):
     request = Request('https://api.snapcraft.io/v2/snaps/find?publisher=' + config['publisher'],
                       headers={'Snap-Device-Series': '16', 'User-Agent': 'snap-charts/0.1'})
     for attempt in range(3):
+        delay = 2 ** attempt
         try:
             with urlopen(request, timeout=60) as response:
                 results = json.load(response)['results']
             if not results:
                 raise ValueError('Empty publisher inventory')
             break
-        except Exception:
+        except Exception as error:
             if attempt == 2:
-                raise RuntimeError('Publisher discovery failed; refusing an incomplete inventory') from None
-            time.sleep(2 ** attempt)
-    snaps = {s['name']: {'name': s['name'], 'title': s.get('snap', {}).get('title', s['name'])} for s in results}
+                # Account access is not consent to publish private or other
+                # publishers' snaps. Keep the previous snapshot on discovery failure.
+                raise RuntimeError('Publisher discovery failed; preserving the published snapshot '
+                                   f'({type(error).__name__})') from None
+            retry_after = getattr(error, 'headers', None) and error.headers.get('Retry-After', '')
+            if retry_after and retry_after.isdigit():
+                delay = min(int(retry_after), 60)
+            time.sleep(delay)
+    known = {s['name']: s.get('title') for s in config['snaps']}
+    snaps = {s['name']: {'name': s['name'], 'title': s.get('snap', {}).get('title') or known.get(s['name']) or s['name']}
+             for s in results}
     for snap in config['snaps']:
         snaps.setdefault(snap['name'], {'name': snap['name'], 'title': snap.get('title', snap['name'])})
     for name in config.get('exclude', []):
         snaps.pop(name, None)
+    if not snaps:
+        raise RuntimeError('No snaps selected; preserving the published snapshot')
     if any(not re.fullmatch(r'[a-z0-9][a-z0-9-]*', name) for name in snaps):
         raise ValueError('Unsafe snap name')
     return sorted(snaps.values(), key=lambda s: s['name'])
@@ -156,13 +156,13 @@ def collect_one(task, refresh=True):
     return snap, metric, record
 
 
-def publish(records, snaps, output, history_start, demo=False):
+def publish(records, snaps, output, history_start, demo=False, publisher='popey'):
     # This directory is generated output only. Remove obsolete partitions so
     # excluded snaps or demo files cannot remain in a subsequent deployment.
     output.mkdir(parents=True, exist_ok=True)
     obsolete = set(output.rglob('*.json'))
     manifest = {'schemaVersion': 1, 'generatedAt': datetime.now(timezone.utc).isoformat(),
-                'publisher': 'popey', 'demo': demo, 'historyStart': str(history_start), 'snaps': snaps, 'metrics': METRICS,
+                'publisher': publisher, 'demo': demo, 'historyStart': str(history_start), 'snaps': snaps, 'metrics': METRICS,
                 'records': {}, 'partitions': {}}
     by_metric = {metric: {} for metric in METRICS}
     for snap, metric, record in records:
@@ -204,6 +204,8 @@ def select_backfill(boundaries, start, limit, oldest_first=False, overview_first
 
 
 def collect_batch(config, root, output, snaps, start, end, historical_only, continuous):
+    if not snaps:
+        raise RuntimeError('No snaps selected; preserving the published snapshot')
     pairs = [(s['name'], m) for s in snaps for m in METRICS]
     boundaries = {}
     for pair in pairs:
@@ -234,7 +236,7 @@ def collect_batch(config, root, output, snaps, start, end, historical_only, cont
     if historical_only:
         records = [(s, m, json.loads(path.read_text()) if path.exists() else {})
                    for s, m in pairs for path in [root / s / (m + '.json')]]
-    publish(records, snaps, output, start)
+    publish(records, snaps, output, start, publisher=config['publisher'])
     complete = sum(r.get('historyFrom', str(end)) <= str(start) for _, _, r in records)
     earliest = min(r.get('historyFrom', str(end)) for _, _, r in records)
     print(f'Snapshot updated: earliest checked date {earliest}; {complete}/{len(pairs)} metrics checked back to {start}.', flush=True)
@@ -252,10 +254,16 @@ def main():
                         help='Fetch a historical batch without re-querying recent observations')
     parser.add_argument('--backfill-until-complete', action='store_true',
                         help='Continue historical-only batches until every metric reaches historyStart')
+    parser.add_argument('--publisher', help='Override the publisher in the config file')
+    parser.add_argument('--sync-config', action='store_true',
+                        help='Write the discovered snap list back to the config file')
     args = parser.parse_args()
     if args.credentials:
         os.environ['SNAPCRAFT_STORE_CREDENTIALS'] = args.credentials.read_text().strip()
-    config = json.loads(Path(args.config).read_text())
+    config_path = Path(args.config)
+    config = json.loads(config_path.read_text())
+    if args.publisher:
+        config['publisher'] = args.publisher
     root = Path(args.state)
     root.mkdir(parents=True, exist_ok=True)
     with (root / '.collector.lock').open('a') as lock:
@@ -266,6 +274,10 @@ def main():
         start = date.fromisoformat(config['historyStart'])
         end = datetime.now(timezone.utc).date() - timedelta(days=1)
         snaps = discover(config)
+        if args.sync_config:
+            config['snaps'] = [{k: v for k, v in s.items() if k == 'name' or (k == 'title' and v != s['name'])}
+                               for s in snaps]
+            write_json(config_path, config)
         historical_only = args.backfill_only or args.backfill_until_complete
         if config['backfillRequests'] <= 0 and historical_only:
             raise SystemExit('backfillRequests must be positive for historical collection')
